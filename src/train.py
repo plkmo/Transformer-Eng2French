@@ -72,7 +72,7 @@ if __name__=="__main__":
     src_vocab = len(EN.vocab)
     trg_vocab = len(FR.vocab)
     
-    batch_size = 5
+    batch_size = 64
     model_no = 0
     cuda = torch.cuda.is_available()
     net = Transformer(src_vocab=src_vocab, trg_vocab=trg_vocab, d_model=512, num=6, n_heads=8)
@@ -123,7 +123,7 @@ if __name__=="__main__":
             if i % 100 == 99: # print every 100 mini-batches of size = batch_size
                 losses_per_batch.append(total_loss/100)
                 print('[Epoch: %d, %5d/ %d points] total loss per batch: %.7f' %
-                      (e, (i + 1)*batch_size, len(train_iter), total_loss/100))
+                      (e, (i + 1)*batch_size, len(train), total_loss/100))
                 total_loss = 0.0
         losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))
         accuracy_per_epoch.append(evaluate_results(net, train_iter, cuda))
