@@ -53,7 +53,7 @@ def evaluate(output, labels_e):
 def evaluate_results(net, data_loader, cuda):
     net.eval(); acc = 0
     print("Evaluating...")
-    for i, data in tqdm(enumerate(data_loader)):
+    for i, data in tqdm(enumerate(data_loader), total=len(data_loader)):
         trg_input = data.FR[:,:-1]
         labels = data.FR[:,1:].contiguous().view(-1)
         src_mask, trg_mask = create_masks(data.EN, trg_input)
