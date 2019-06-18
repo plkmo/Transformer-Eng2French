@@ -13,6 +13,7 @@ import torchtext
 from torchtext.data import BucketIterator
 from models import Transformer, create_masks
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 def load_pickle(filename):
     completeName = os.path.join("./data/",\
@@ -44,12 +45,15 @@ def load(net, optimizer, model_no=0, load_best=True):
     return start_epoch, best_pred
 
 def evaluate(output, labels_e):
+    ### ignore index 1 (padding) when calculating accuracy
+    idxs = (labels_e != 1).nonzero().squeeze()
     labels = torch.softmax(output, dim=1).max(1)[1]
-    return sum(labels_e == labels).item()/len(labels)
+    return sum(labels_e[idxs] == labels[idxs]).item()/len(idxs)
 
 def evaluate_results(net, data_loader, cuda):
     net.eval(); acc = 0
-    for i, data in enumerate(data_loader):
+    print("Evaluating...")
+    for i, data in tqdm(enumerate(data_loader)):
         trg_input = data.FR[:,:-1]
         labels = data.FR[:,1:].contiguous().view(-1)
         src_mask, trg_mask = create_masks(data.EN, trg_input)
@@ -72,7 +76,7 @@ if __name__=="__main__":
     src_vocab = len(EN.vocab)
     trg_vocab = len(FR.vocab)
     
-    batch_size = 64
+    batch_size = 32
     model_no = 0
     cuda = torch.cuda.is_available()
     net = Transformer(src_vocab=src_vocab, trg_vocab=trg_vocab, d_model=512, num=6, n_heads=8)
@@ -138,7 +142,7 @@ if __name__=="__main__":
                     'optimizer' : optimizer.state_dict(),\
                 }, os.path.join("./data/" ,\
                     "test_model_best_%d.pth.tar" % model_no))
-        if (e % 5) == 0:
+        if (e % 2) == 0:
             save_as_pickle("test_losses_per_epoch_%d.pkl" % model_no, losses_per_epoch)
             save_as_pickle("test_accuracy_per_epoch_%d.pkl" % model_no, accuracy_per_epoch)
             torch.save({
