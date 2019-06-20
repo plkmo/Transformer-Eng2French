@@ -66,7 +66,7 @@ if __name__ == "__main__":
     net.eval()
     
     ### process user input sentence
-    sent = "I am a music student."
+    sent = "You have a green car."
     sent = tokenizer_en.tokenize(sent).split()
     sent = [EN.vocab.stoi[tok] for tok in sent]
     sent = Variable(torch.LongTensor(sent)).unsqueeze(0)
@@ -85,8 +85,8 @@ if __name__ == "__main__":
         if cuda:
             trg = trg.cuda(); trg_mask = trg_mask.cuda()
         outputs = net.fc1(net.decoder(trg, e_out, src_mask, trg_mask))
-        out_idxs = torch.softmax(outputs, dim=2).max(2)[1]
-        trg = torch.cat((trg, out_idxs), dim=1)
+        out_idxs = torch.softmax(outputs, dim=2).max(2)[1]; print(out_idxs)
+        trg = torch.cat((trg, out_idxs[:,-1:]), dim=1)
         if cuda:
             out_idxs = out_idxs.cpu().numpy()
         else:

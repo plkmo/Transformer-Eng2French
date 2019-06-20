@@ -84,7 +84,7 @@ if __name__=="__main__":
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
     criterion = nn.CrossEntropyLoss(ignore_index=1)
-    optimizer = optim.Adam(net.parameters(), lr=0.0005, betas=(0.9, 0.98), eps=1e-9)
+    optimizer = optim.Adam(net.parameters(), lr=0.00027, betas=(0.9, 0.98), eps=1e-9)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.9)
     if cuda:
         net.cuda()
