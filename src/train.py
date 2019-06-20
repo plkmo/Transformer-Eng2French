@@ -84,8 +84,8 @@ if __name__=="__main__":
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
     criterion = nn.CrossEntropyLoss(ignore_index=1)
-    optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.98), eps=1e-9)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,70,80], gamma=0.5)
+    optimizer = optim.Adam(net.parameters(), lr=0.0005, betas=(0.9, 0.98), eps=1e-9)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.9)
     if cuda:
         net.cuda()
         
@@ -93,7 +93,7 @@ if __name__=="__main__":
         start_epoch, acc = load(net, optimizer, model_no, load_best=False)
     except:
         start_epoch = 0; acc = 0
-    stop_epoch = 70; end_epoch = 70
+    stop_epoch = 200; end_epoch = 200
     
     try:
         losses_per_epoch = load_pickle("test_losses_per_epoch_%d.pkl" % model_no)
