@@ -11,6 +11,7 @@ import torch.optim as optim
 from torch.autograd import Variable
 import torchtext
 from models import Transformer, create_masks, create_trg_mask
+from train import load_state
 from process_data import tokener
 
 def load_pickle(filename):
@@ -28,19 +29,6 @@ def save_as_pickle(filename, data):
     
 def dum_tokenizer(sent):
     return sent.split()
-
-### Loads model and optimizer states
-def load(net, optimizer, model_no=0, load_best=True):
-    base_path = "./data/"
-    if load_best == False:
-        checkpoint = torch.load(os.path.join(base_path,"test_checkpoint_%d.pth.tar" % model_no))
-    else:
-        checkpoint = torch.load(os.path.join(base_path,"test_model_best_%d.pth.tar" % model_no))
-    start_epoch = checkpoint['epoch']
-    best_pred = checkpoint['best_acc']
-    net.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    return start_epoch, best_pred
 
 if __name__ == "__main__":
     ### Load model and vocab
@@ -62,40 +50,40 @@ if __name__ == "__main__":
     optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.98), eps=1e-9)
     if cuda:
         net.cuda()
-    start_epoch, acc = load(net, optimizer, model_no, load_best=False)
+    start_epoch, acc = load_state(net, optimizer, model_no=0, load_best=False)
     net.eval()
-    
-    ### process user input sentence
-    sent = "You are a good student."
-    sent = tokenizer_en.tokenize(sent).split()
-    sent = [EN.vocab.stoi[tok] for tok in sent]
-    sent = Variable(torch.LongTensor(sent)).unsqueeze(0)
     trg_init = FR.vocab.stoi["<sos>"]
     trg_init = Variable(torch.LongTensor([trg_init])).unsqueeze(0)
-    trg = trg_init
-    trg_end = FR.vocab.stoi["<eos>"]
-    src_mask, _ = create_masks(sent, trg_init)
-    if cuda:
-        sent = sent.cuda(); src_mask = src_mask.cuda()
-        trg = trg.cuda()
-    e_out = net.encoder(sent, src_mask) # encoder output for english sentence
-    translated_word = []; translated_word_idxs = []
-    for i in range(2, 128):
-        trg_mask = create_trg_mask(trg, cuda=cuda)
-        if cuda:
-            trg = trg.cuda(); trg_mask = trg_mask.cuda()
-        outputs = net.fc1(net.decoder(trg, e_out, src_mask, trg_mask))
-        out_idxs = torch.softmax(outputs, dim=2).max(2)[1]; print(out_idxs)
-        trg = torch.cat((trg, out_idxs[:,-1:]), dim=1)
-        if cuda:
-            out_idxs = out_idxs.cpu().numpy()
-        else:
-            out_idxs = out_idxs.numpy()
-        translated_word_idxs.append(out_idxs.tolist()[0][-1])
-        if translated_word_idxs[-1] == FR.vocab.stoi["<eos>"]:
-            break
-        translated_word.append(FR.vocab.itos[translated_word_idxs[-1]])
-        print(translated_word[-1])
+    
+    while True:
+    ### process user input sentence
+        sent = input("Enter English sentence:\n")
+        sent = tokenizer_en.tokenize(sent).split()
+        sent = [EN.vocab.stoi[tok] for tok in sent]
+        sent = Variable(torch.LongTensor(sent)).unsqueeze(0)
         
-    print(" ".join(translated_word))
-    print(" ".join(FR.vocab.itos[i] for i in out_idxs[0]))
+        trg = trg_init
+        src_mask, _ = create_masks(sent, trg_init)
+        if cuda:
+            sent = sent.cuda(); src_mask = src_mask.cuda()
+            trg = trg.cuda()
+        e_out = net.encoder(sent, src_mask) # encoder output for english sentence
+        translated_word = []; translated_word_idxs = []
+        for i in range(2, 128):
+            trg_mask = create_trg_mask(trg, cuda=cuda)
+            if cuda:
+                trg = trg.cuda(); trg_mask = trg_mask.cuda()
+            outputs = net.fc1(net.decoder(trg, e_out, src_mask, trg_mask))
+            out_idxs = torch.softmax(outputs, dim=2).max(2)[1]
+            trg = torch.cat((trg, out_idxs[:,-1:]), dim=1)
+            if cuda:
+                out_idxs = out_idxs.cpu().numpy()
+            else:
+                out_idxs = out_idxs.numpy()
+            translated_word_idxs.append(out_idxs.tolist()[0][-1])
+            if translated_word_idxs[-1] == FR.vocab.stoi["<eos>"]:
+                break
+            translated_word.append(FR.vocab.itos[translated_word_idxs[-1]])
+            
+        print(" ".join(translated_word))
+        print(" ".join(FR.vocab.itos[i] for i in out_idxs[0][:-1]))
