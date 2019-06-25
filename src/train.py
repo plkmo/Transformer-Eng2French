@@ -91,12 +91,13 @@ def evaluate_results(net, data_loader, cuda):
 
 if __name__=="__main__":
     parser = ArgumentParser()
-    parser.add_argument("--batch_size", type=int, default=5, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
     parser.add_argument("--d_model", type=int, default=512, help="Transformer model dimension")
     parser.add_argument("--num", type=int, default=6, help="Number of layers")
     parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads")
     parser.add_argument("--lr", type=float, default=0.000001, help="learning rate")
     parser.add_argument("--model_no", type=int, default=0, help="Model ID")
+    parser.add_argument("--num_epochs", type=int, default=250, help="No of epochs")
     args = parser.parse_args()
     
     logger.info("Preparing data...")
@@ -121,12 +122,11 @@ if __name__=="__main__":
     if cuda:
         net.cuda()
     start_epoch, acc = load_state(net, optimizer, args.model_no, load_best=False)
-    stop_epoch = 250; end_epoch = 250
     losses_per_epoch, accuracy_per_epoch = load_results(model_no=args.model_no)
     train_iter = BucketIterator(train, batch_size=args.batch_size, repeat=False, sort_key=lambda x: (len(x["EN"]), len(x["FR"])),\
                                 shuffle=True, train=True)
     logger.info("Starting training process...")
-    for e in range(start_epoch, end_epoch):
+    for e in range(start_epoch, args.num_epochs):
         scheduler.step()
         net.train()
         losses_per_batch = []; total_loss = 0.0
