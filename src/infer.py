@@ -66,7 +66,7 @@ if __name__ == "__main__":
     net.eval()
     
     ### process user input sentence
-    sent = "You have a green car."
+    sent = "You are a good student."
     sent = tokenizer_en.tokenize(sent).split()
     sent = [EN.vocab.stoi[tok] for tok in sent]
     sent = Variable(torch.LongTensor(sent)).unsqueeze(0)
@@ -98,3 +98,4 @@ if __name__ == "__main__":
         print(translated_word[-1])
         
     print(" ".join(translated_word))
+    print(" ".join(FR.vocab.itos[i] for i in out_idxs[0]))
