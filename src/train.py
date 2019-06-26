@@ -12,6 +12,7 @@ from argparse import ArgumentParser
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from torch.nn.utils import clip_grad_norm_
 import torchtext
 from torchtext.data import BucketIterator
 from models import Transformer, create_masks
@@ -53,6 +54,7 @@ def load_state(net, optimizer, model_no=0, load_best=False):
         best_pred = checkpoint['best_acc']
         net.load_state_dict(checkpoint['state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer'])
+        scheduler.load_state_dict(checkpoint['scheduler'])
         logger.info("Loaded model and optimizer.")    
     return start_epoch, best_pred
 
@@ -96,6 +98,8 @@ if __name__=="__main__":
     parser.add_argument("--num", type=int, default=6, help="Number of layers")
     parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads")
     parser.add_argument("--lr", type=float, default=0.000001, help="learning rate")
+    parser.add_argument("--gradient_acc_steps", type=int, default=3, help="Number of steps of gradient accumulation")
+    parser.add_argument("--max_norm", type=float, default=1.0, help="Clipped gradient norm")
     parser.add_argument("--model_no", type=int, default=0, help="Model ID")
     parser.add_argument("--num_epochs", type=int, default=250, help="No of epochs")
     args = parser.parse_args()
@@ -118,7 +122,7 @@ if __name__=="__main__":
             nn.init.xavier_uniform_(p)
     criterion = nn.CrossEntropyLoss(ignore_index=1)
     optimizer = optim.Adam(net.parameters(), lr=args.lr, betas=(0.9, 0.98), eps=1e-9)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.9)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.7)
     if cuda:
         net.cuda()
     start_epoch, acc = load_state(net, optimizer, args.model_no, load_best=False)
@@ -127,29 +131,30 @@ if __name__=="__main__":
                                 shuffle=True, train=True)
     logger.info("Starting training process...")
     for e in range(start_epoch, args.num_epochs):
-        scheduler.step()
         net.train()
         losses_per_batch = []; total_loss = 0.0
         for i, data in enumerate(train_iter):
-            #data.EN = data.EN.transpose(0,1)
-            #data.FR = data.FR.transpose(0,1)
             trg_input = data.FR[:,:-1]
             labels = data.FR[:,1:].contiguous().view(-1)
             src_mask, trg_mask = create_masks(data.EN, trg_input)
             if cuda:
                 data.EN = data.EN.cuda(); trg_input = trg_input.cuda(); labels = labels.cuda()
                 src_mask = src_mask.cuda(); trg_mask = trg_mask.cuda()
-            optimizer.zero_grad()
             outputs = net(data.EN, trg_input, src_mask, trg_mask)
             outputs = outputs.view(-1, outputs.size(-1))
             loss = criterion(outputs, labels)
+            loss = loss/args.gradient_acc_steps
             loss.backward()
-            optimizer.step()
+            clip_grad_norm_(net.parameters(), args.max_norm)
+            if (e % args.gradient_acc_steps) == 0:
+                optimizer.step()
+                optimizer.zero_grad()
+                scheduler.step()
             total_loss += loss.item()
             if i % 100 == 99: # print every 100 mini-batches of size = batch_size
-                losses_per_batch.append(total_loss/100)
+                losses_per_batch.append(args.gradient_acc_steps*total_loss/100)
                 print('[Epoch: %d, %5d/ %d points] total loss per batch: %.7f' %
-                      (e, (i + 1)*args.batch_size, len(train), total_loss/100))
+                      (e, (i + 1)*args.batch_size, len(train), losses_per_batch[-1]))
                 total_loss = 0.0
         losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))
         accuracy_per_epoch.append(evaluate_results(net, train_iter, cuda))
@@ -162,6 +167,7 @@ if __name__=="__main__":
                     'state_dict': net.state_dict(),\
                     'best_acc': acc,\
                     'optimizer' : optimizer.state_dict(),\
+                    'scheduler' : scheduler.state_dict(),\
                 }, os.path.join("./data/" ,\
                     "test_model_best_%d.pth.tar" % args.model_no))
         if (e % 2) == 0:
@@ -172,6 +178,7 @@ if __name__=="__main__":
                     'state_dict': net.state_dict(),\
                     'best_acc': accuracy_per_epoch[-1],\
                     'optimizer' : optimizer.state_dict(),\
+                    'scheduler' : scheduler.state_dict(),\
                 }, os.path.join("./data/",\
                     "test_checkpoint_%d.pth.tar" % args.model_no))
     
