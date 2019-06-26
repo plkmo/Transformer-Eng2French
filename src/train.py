@@ -18,7 +18,8 @@ from torchtext.data import BucketIterator
 from models import Transformer, create_masks
 import matplotlib.pyplot as plt
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', \
+                    datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
 logger = logging.getLogger("__file__")
 
 def load_pickle(filename):
@@ -97,7 +98,7 @@ if __name__=="__main__":
     parser.add_argument("--d_model", type=int, default=512, help="Transformer model dimension")
     parser.add_argument("--num", type=int, default=6, help="Number of layers")
     parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads")
-    parser.add_argument("--lr", type=float, default=0.000001, help="learning rate")
+    parser.add_argument("--lr", type=float, default=0.00001, help="learning rate")
     parser.add_argument("--gradient_acc_steps", type=int, default=3, help="Number of steps of gradient accumulation")
     parser.add_argument("--max_norm", type=float, default=1.0, help="Clipped gradient norm")
     parser.add_argument("--model_no", type=int, default=0, help="Model ID")
