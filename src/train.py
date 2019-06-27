@@ -16,11 +16,12 @@ from torch.nn.utils import clip_grad_norm_
 import torchtext
 from torchtext.data import BucketIterator
 from models import Transformer, create_masks
+from process_data import tokenize_data
 import matplotlib.pyplot as plt
 
 logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', \
                     datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
-logger = logging.getLogger("__file__")
+logger = logging.getLogger(__file__)
 
 def load_pickle(filename):
     completeName = os.path.join("./data/",\
@@ -38,7 +39,25 @@ def save_as_pickle(filename, data):
 def dum_tokenizer(sent):
     return sent.split()
 
-def load_state(net, optimizer, model_no=0, load_best=False):
+def load_dataloaders(args):
+    logger.info("Preparing dataloaders...")
+    FR = torchtext.data.Field(tokenize=dum_tokenizer, lower=True, init_token="<sos>", eos_token="<eos>",\
+                              batch_first=True)
+    EN = torchtext.data.Field(tokenize=dum_tokenizer, lower=True, batch_first=True)
+    
+    train_path = os.path.join("./data/", "df.csv")
+    if not os.path.isfile(train_path):
+        tokenize_data()
+    train = torchtext.data.TabularDataset(train_path, format="csv", \
+                                             fields=[("EN", EN), ("FR", FR)])
+    FR.build_vocab(train)
+    EN.build_vocab(train)
+    train_iter = BucketIterator(train, batch_size=args.batch_size, repeat=False, sort_key=lambda x: (len(x["EN"]), len(x["FR"])),\
+                                shuffle=True, train=True)
+    train_length = len(train)
+    return train_iter, FR, EN, train_length
+
+def load_state(net, optimizer, scheduler, model_no=0, load_best=False):
     """ Loads saved model and optimizer states if exists """
     base_path = "./data/"
     checkpoint_path = os.path.join(base_path,"test_checkpoint_%d.pth.tar" % model_no)
@@ -98,21 +117,14 @@ if __name__=="__main__":
     parser.add_argument("--d_model", type=int, default=512, help="Transformer model dimension")
     parser.add_argument("--num", type=int, default=6, help="Number of layers")
     parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads")
-    parser.add_argument("--lr", type=float, default=0.00001, help="learning rate")
+    parser.add_argument("--lr", type=float, default=0.00002, help="learning rate")
     parser.add_argument("--gradient_acc_steps", type=int, default=3, help="Number of steps of gradient accumulation")
     parser.add_argument("--max_norm", type=float, default=1.0, help="Clipped gradient norm")
     parser.add_argument("--model_no", type=int, default=0, help="Model ID")
     parser.add_argument("--num_epochs", type=int, default=250, help="No of epochs")
     args = parser.parse_args()
     
-    logger.info("Preparing data...")
-    FR = torchtext.data.Field(tokenize=dum_tokenizer, lower=True, init_token="<sos>", eos_token="<eos>",\
-                              batch_first=True)
-    EN = torchtext.data.Field(tokenize=dum_tokenizer, lower=True, batch_first=True)
-    train = torchtext.data.TabularDataset(os.path.join("./data/", "df.csv"), format="csv", \
-                                             fields=[("EN", EN), ("FR", FR)])
-    FR.build_vocab(train)
-    EN.build_vocab(train)
+    train_iter, FR, EN, train_length = load_dataloaders(args)
     src_vocab = len(EN.vocab)
     trg_vocab = len(FR.vocab)
     
@@ -126,10 +138,9 @@ if __name__=="__main__":
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.7)
     if cuda:
         net.cuda()
-    start_epoch, acc = load_state(net, optimizer, args.model_no, load_best=False)
+    start_epoch, acc = load_state(net, optimizer, scheduler, args.model_no, load_best=False)
     losses_per_epoch, accuracy_per_epoch = load_results(model_no=args.model_no)
-    train_iter = BucketIterator(train, batch_size=args.batch_size, repeat=False, sort_key=lambda x: (len(x["EN"]), len(x["FR"])),\
-                                shuffle=True, train=True)
+    
     logger.info("Starting training process...")
     for e in range(start_epoch, args.num_epochs):
         net.train()
@@ -155,7 +166,7 @@ if __name__=="__main__":
             if i % 100 == 99: # print every 100 mini-batches of size = batch_size
                 losses_per_batch.append(args.gradient_acc_steps*total_loss/100)
                 print('[Epoch: %d, %5d/ %d points] total loss per batch: %.7f' %
-                      (e, (i + 1)*args.batch_size, len(train), losses_per_batch[-1]))
+                      (e, (i + 1)*args.batch_size, train_length, losses_per_batch[-1]))
                 total_loss = 0.0
         losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))
         accuracy_per_epoch.append(evaluate_results(net, train_iter, cuda))

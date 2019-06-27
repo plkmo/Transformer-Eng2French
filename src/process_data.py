@@ -7,11 +7,13 @@ Created on Tue Jun 11 15:23:19 2019
 
 import pandas as pd
 import os
-import dill
 import re
 import spacy
-import torchtext
-from torchtext.data import BucketIterator
+import logging
+
+logging.basicConfig(format='%(asctime)s [%(levelname)s]: %(message)s', \
+                    datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.INFO)
+logger = logging.getLogger(__file__)
 
 class tokener(object):
     def __init__(self, lang):
@@ -32,8 +34,8 @@ class tokener(object):
 def dum_tokenizer(sent):
     return sent.split()
 
-    
-if __name__=="__main__":
+def tokenize_data():
+    logger.info("Loading raw data and tokenizing...")
     df = pd.read_csv(os.path.join("./data/", "english.txt"), names=["English"])
     df["French"] = pd.read_csv(os.path.join("./data/", "french.txt"), names=["French"])["French"]    
     tokenizer_fr = tokener("fr")
@@ -41,14 +43,7 @@ if __name__=="__main__":
     df["English"] = df["English"].apply(lambda x: tokenizer_en.tokenize(x))
     df["French"] = df["French"].apply(lambda x: tokenizer_fr.tokenize(x))
     df.to_csv(os.path.join("./data/", "df.csv"), index=False)
+    logger.info("Done loading raw data and tokenizing!")
     
-    FR = torchtext.data.Field(tokenize=dum_tokenizer, lower=True, init_token="<sos>", eos_token="<eos>",\
-                              batch_first=True)
-    EN = torchtext.data.Field(tokenize=dum_tokenizer, lower=True, batch_first=True)
-    train = torchtext.data.TabularDataset(os.path.join("./data/", "df.csv"), format="csv", \
-                                             fields=[("EN", EN), ("FR", FR)])
-    FR.build_vocab(train)
-    EN.build_vocab(train)
-    train_iter = BucketIterator(train, batch_size=25, repeat=False, sort_key=lambda x: (len(x["EN"]), len(x["FR"])),\
-                                shuffle=True, train=True)
-    
+if __name__ == "__main__":
+    tokenize_data()
