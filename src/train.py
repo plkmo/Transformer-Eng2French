@@ -97,18 +97,20 @@ def evaluate(output, labels_e):
     return sum(labels_e[idxs] == labels[idxs]).item()/len(idxs)
 
 def evaluate_results(net, data_loader, cuda):
-    net.eval(); acc = 0
+    acc = 0
     print("Evaluating...")
-    for i, data in tqdm(enumerate(data_loader), total=len(data_loader)):
-        trg_input = data.FR[:,:-1]
-        labels = data.FR[:,1:].contiguous().view(-1)
-        src_mask, trg_mask = create_masks(data.EN, trg_input)
-        if cuda:
-            data.EN = data.EN.cuda(); trg_input = trg_input.cuda(); labels = labels.cuda()
-            src_mask = src_mask.cuda(); trg_mask = trg_mask.cuda()
-        outputs = net(data.EN, trg_input, src_mask, trg_mask)
-        outputs = outputs.view(-1, outputs.size(-1))
-        acc += evaluate(outputs, labels)
+    with torch.no_grad():
+        net.eval()
+        for i, data in tqdm(enumerate(data_loader), total=len(data_loader)):
+            trg_input = data.FR[:,:-1]
+            labels = data.FR[:,1:].contiguous().view(-1)
+            src_mask, trg_mask = create_masks(data.EN, trg_input)
+            if cuda:
+                data.EN = data.EN.cuda(); trg_input = trg_input.cuda(); labels = labels.cuda()
+                src_mask = src_mask.cuda(); trg_mask = trg_mask.cuda()
+            outputs = net(data.EN, trg_input, src_mask, trg_mask)
+            outputs = outputs.view(-1, outputs.size(-1))
+            acc += evaluate(outputs, labels)
     return acc/(i + 1)
 
 if __name__=="__main__":
@@ -117,11 +119,11 @@ if __name__=="__main__":
     parser.add_argument("--d_model", type=int, default=512, help="Transformer model dimension")
     parser.add_argument("--num", type=int, default=6, help="Number of layers")
     parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads")
-    parser.add_argument("--lr", type=float, default=0.00002, help="learning rate")
+    parser.add_argument("--lr", type=float, default=0.0007, help="learning rate")
     parser.add_argument("--gradient_acc_steps", type=int, default=3, help="Number of steps of gradient accumulation")
     parser.add_argument("--max_norm", type=float, default=1.0, help="Clipped gradient norm")
     parser.add_argument("--model_no", type=int, default=0, help="Model ID")
-    parser.add_argument("--num_epochs", type=int, default=250, help="No of epochs")
+    parser.add_argument("--num_epochs", type=int, default=350, help="No of epochs")
     args = parser.parse_args()
     
     train_iter, FR, EN, train_length = load_dataloaders(args)
