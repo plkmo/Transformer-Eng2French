@@ -15,6 +15,7 @@ import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
 import torchtext
 from torchtext.data import BucketIterator
+from utils import CosineWithRestarts
 from models import Transformer, create_masks
 from process_data import tokenize_data
 import matplotlib.pyplot as plt
@@ -115,12 +116,12 @@ def evaluate_results(net, data_loader, cuda):
 
 if __name__=="__main__":
     parser = ArgumentParser()
-    parser.add_argument("--batch_size", type=int, default=32, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=50, help="Batch size")
     parser.add_argument("--d_model", type=int, default=512, help="Transformer model dimension")
     parser.add_argument("--num", type=int, default=6, help="Number of layers")
     parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads")
-    parser.add_argument("--lr", type=float, default=0.0007, help="learning rate")
-    parser.add_argument("--gradient_acc_steps", type=int, default=3, help="Number of steps of gradient accumulation")
+    parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
+    parser.add_argument("--gradient_acc_steps", type=int, default=1, help="Number of steps of gradient accumulation")
     parser.add_argument("--max_norm", type=float, default=1.0, help="Clipped gradient norm")
     parser.add_argument("--model_no", type=int, default=0, help="Model ID")
     parser.add_argument("--num_epochs", type=int, default=350, help="No of epochs")
@@ -137,7 +138,8 @@ if __name__=="__main__":
             nn.init.xavier_uniform_(p)
     criterion = nn.CrossEntropyLoss(ignore_index=1)
     optimizer = optim.Adam(net.parameters(), lr=args.lr, betas=(0.9, 0.98), eps=1e-9)
-    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.7)
+    #scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.7)
+    scheduler = CosineWithRestarts(optimizer, T_max=10)
     if cuda:
         net.cuda()
     start_epoch, acc = load_state(net, optimizer, scheduler, args.model_no, load_best=False)
@@ -159,7 +161,7 @@ if __name__=="__main__":
             loss = criterion(outputs, labels)
             loss = loss/args.gradient_acc_steps
             loss.backward()
-            clip_grad_norm_(net.parameters(), args.max_norm)
+            #clip_grad_norm_(net.parameters(), args.max_norm)
             if (e % args.gradient_acc_steps) == 0:
                 optimizer.step()
                 optimizer.zero_grad()
@@ -171,7 +173,7 @@ if __name__=="__main__":
                       (e, (i + 1)*args.batch_size, train_length, losses_per_batch[-1]))
                 total_loss = 0.0
         losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))
-        accuracy_per_epoch.append(evaluate_results(net, train_iter, cuda))
+        #accuracy_per_epoch.append(evaluate_results(net, train_iter, cuda))
         print("Losses at Epoch %d: %.7f" % (e, losses_per_epoch[-1]))
         print("Accuracy at Epoch %d: %.7f" % (e, accuracy_per_epoch[-1]))
         if accuracy_per_epoch[-1] > acc:

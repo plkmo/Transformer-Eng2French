@@ -157,7 +157,7 @@ class EncoderBlock(nn.Module):
         super(EncoderBlock, self).__init__()
         self.num = num
         self.embed = nn.Embedding(vocab_size, d_model)
-        self.pe = Pos_Encoder(d_model, max_len=128)
+        self.pe = Pos_Encoder(d_model, max_len= 80)
         self.layers = clone_layers(EncoderLayer(d_model, n_heads), num)
         self.norm = LayerNorm(d_model)
     
@@ -174,7 +174,7 @@ class DecoderBlock(nn.Module):
         super(DecoderBlock, self).__init__()
         self.num = num
         self.embed = nn.Embedding(vocab_size, d_model)
-        self.pe = Pos_Encoder(d_model, max_len = 128)
+        self.pe = Pos_Encoder(d_model, max_len = 80)
         self.layers = clone_layers(DecoderLayer(d_model, n_heads), num)
         self.norm = LayerNorm(d_model)
     
