@@ -13,6 +13,7 @@ import torchtext
 from models import Transformer, create_masks, create_trg_mask
 from train import load_state
 from process_data import tokener
+from utils import CosineWithRestarts
 
 def load_pickle(filename):
     completeName = os.path.join("./data/",\
@@ -48,9 +49,10 @@ if __name__ == "__main__":
     cuda = torch.cuda.is_available()
     net = Transformer(src_vocab=src_vocab, trg_vocab=trg_vocab, d_model=512, num=6, n_heads=8)
     optimizer = optim.Adam(net.parameters(), lr=0.001, betas=(0.9, 0.98), eps=1e-9)
+    scheduler = CosineWithRestarts(optimizer, T_max=10)
     if cuda:
         net.cuda()
-    start_epoch, acc = load_state(net, optimizer, model_no=0, load_best=False)
+    start_epoch, acc = load_state(net, optimizer, scheduler, model_no=0, load_best=False)
     net.eval()
     trg_init = FR.vocab.stoi["<sos>"]
     trg_init = Variable(torch.LongTensor([trg_init])).unsqueeze(0)
@@ -69,7 +71,7 @@ if __name__ == "__main__":
             trg = trg.cuda()
         e_out = net.encoder(sent, src_mask) # encoder output for english sentence
         translated_word = []; translated_word_idxs = []
-        for i in range(2, 128):
+        for i in range(2, 80):
             trg_mask = create_trg_mask(trg, cuda=cuda)
             if cuda:
                 trg = trg.cuda(); trg_mask = trg_mask.cuda()

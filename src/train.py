@@ -91,11 +91,14 @@ def load_results(model_no=0):
         losses_per_epoch, accuracy_per_epoch = [], []
     return losses_per_epoch, accuracy_per_epoch
 
-def evaluate(output, labels_e):
+def evaluate(output, labels):
     ### ignore index 1 (padding) when calculating accuracy
-    idxs = (labels_e != 1).nonzero().squeeze()
-    labels = torch.softmax(output, dim=1).max(1)[1]
-    return sum(labels_e[idxs] == labels[idxs]).item()/len(idxs)
+    idxs = (labels != 1).nonzero().squeeze()
+    o_labels = torch.softmax(output, dim=1).max(1)[1]
+    if len(idxs) > 1:
+        return (labels[idxs] == o_labels[idxs]).sum().item()/len(idxs)
+    else:
+        return (labels[idxs] == o_labels[idxs]).sum().item()
 
 def evaluate_results(net, data_loader, cuda):
     acc = 0
@@ -120,7 +123,7 @@ if __name__=="__main__":
     parser.add_argument("--d_model", type=int, default=512, help="Transformer model dimension")
     parser.add_argument("--num", type=int, default=6, help="Number of layers")
     parser.add_argument("--n_heads", type=int, default=8, help="Number of attention heads")
-    parser.add_argument("--lr", type=float, default=0.0001, help="learning rate")
+    parser.add_argument("--lr", type=float, default=0.00015, help="learning rate")
     parser.add_argument("--gradient_acc_steps", type=int, default=1, help="Number of steps of gradient accumulation")
     parser.add_argument("--max_norm", type=float, default=1.0, help="Clipped gradient norm")
     parser.add_argument("--model_no", type=int, default=0, help="Model ID")
@@ -136,10 +139,10 @@ if __name__=="__main__":
     for p in net.parameters():
         if p.dim() > 1:
             nn.init.xavier_uniform_(p)
-    criterion = nn.CrossEntropyLoss(ignore_index=1)
+    criterion = nn.CrossEntropyLoss(reduction="mean", ignore_index=1)
     optimizer = optim.Adam(net.parameters(), lr=args.lr, betas=(0.9, 0.98), eps=1e-9)
     #scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10,20,30,40,50,100,200], gamma=0.7)
-    scheduler = CosineWithRestarts(optimizer, T_max=10)
+    scheduler = CosineWithRestarts(optimizer, T_max=500)
     if cuda:
         net.cuda()
     start_epoch, acc = load_state(net, optimizer, scheduler, args.model_no, load_best=False)
@@ -160,7 +163,7 @@ if __name__=="__main__":
             outputs = outputs.view(-1, outputs.size(-1))
             loss = criterion(outputs, labels)
             loss = loss/args.gradient_acc_steps
-            loss.backward()
+            loss.backward(); #break;break
             #clip_grad_norm_(net.parameters(), args.max_norm)
             if (e % args.gradient_acc_steps) == 0:
                 optimizer.step()
@@ -173,7 +176,7 @@ if __name__=="__main__":
                       (e, (i + 1)*args.batch_size, train_length, losses_per_batch[-1]))
                 total_loss = 0.0
         losses_per_epoch.append(sum(losses_per_batch)/len(losses_per_batch))
-        #accuracy_per_epoch.append(evaluate_results(net, train_iter, cuda))
+        accuracy_per_epoch.append(evaluate_results(net, train_iter, cuda))
         print("Losses at Epoch %d: %.7f" % (e, losses_per_epoch[-1]))
         print("Accuracy at Epoch %d: %.7f" % (e, accuracy_per_epoch[-1]))
         if accuracy_per_epoch[-1] > acc:
@@ -186,7 +189,7 @@ if __name__=="__main__":
                     'scheduler' : scheduler.state_dict(),\
                 }, os.path.join("./data/" ,\
                     "test_model_best_%d.pth.tar" % args.model_no))
-        if (e % 2) == 0:
+        if (e % 1) == 0:
             save_as_pickle("test_losses_per_epoch_%d.pkl" % args.model_no, losses_per_epoch)
             save_as_pickle("test_accuracy_per_epoch_%d.pkl" % args.model_no, accuracy_per_epoch)
             torch.save({
